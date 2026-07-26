@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Dream Lens - AI Dream Interpreter</title>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg:#ffffff; --sb:#f8f8f8; --text:#0d0d0d; --sub:#888;
+            --border:#e8e8e8; --umsg:#f0f0f0; --inp:#ffffff; --card:#ffffff;
+            --scard:#f3f3f3; --accent:#2aabeb; --danger:#e74c3c;
+            --font:'Noto Sans Bengali',sans-serif;
+            --safe-bottom:env(safe-area-inset-bottom,0px);
+            --safe-top:env(safe-area-inset-top,0px);
+        }
+        [data-theme="dark"] {
+            --bg:#13131f; --sb:#1a1a2e; --text:#e6e6f0; --sub:#888;
+            --border:#2a2a40; --umsg:#23233a; --inp:#1e1e32;
+            --card:#1a1a2e; --scard:#23233a;
+        }
+        *,*::before,*::after {
+            margin:0; padding:0; box-sizing:border-box;
+            font-family:var(--font); -webkit-tap-highlight-color:transparent;
+        }
+        html { height:100%; overflow:hidden; }
+        body {
+            display:flex; flex-direction:column; height:100dvh;
+            background:var(--bg); color:var(--text);
+            overflow:hidden; transition:background .3s,color .3s;
+            padding-top:var(--safe-top);
+        }
+
+        #layout { display:flex; flex:1; overflow:hidden; position:relative; }
+
+        /* Overlay */
+        #ov { display:none; position:fixed; inset:0; background:rgba(0,0,0,.3); z-index:90; }
+        #ov.show { display:block; }
+
+        /* Sidebar */
+        #sb {
+            position:absolute; left:-290px; top:0; height:100%; width:min(272px,80vw);
+            background:var(--sb); border-right:1px solid var(--border);
+            display:flex; flex-direction:column;
+            transition:left .28s cubic-bezier(.4,0,.2,1); z-index:100;
+        }
+        #sb.open { left:0; }
+        .sb-top {
+            padding:max(20px,calc(var(--safe-top) + 12px)) 14px 14px;
+            border-bottom:1px solid var(--border); flex-shrink:0;
+        }
+        .new-btn {
+            width:100%; padding:10px 14px; background:transparent;
+            border:1.5px solid var(--border); color:var(--text);
+            border-radius:10px; cursor:pointer; text-align:left;
+            font-weight:700; font-family:var(--font); font-size:14px;
+        }
+        .new-btn:hover { background:var(--umsg); }
+        #hl { flex:1; overflow-y:auto; padding:10px 8px; overscroll-behavior:contain; }
+        .hi {
+            padding:10px 12px; margin-bottom:4px; border-radius:9px; cursor:pointer;
+            white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+            font-size:13.5px; color:var(--text); user-select:none; transition:background .15s;
+        }
+        .hi:hover,.hi.on { background:var(--umsg); }
+        .hi.press { background:#fde8e8; }
+        .set-btn {
+            padding:calc(14px + var(--safe-bottom)) 18px 14px;
+            border-top:1px solid var(--border); cursor:pointer; color:var(--accent);
+            display:flex; align-items:center; gap:10px;
+            font-weight:700; font-size:14px; flex-shrink:0;
+        }
+        .set-btn:hover { background:var(--umsg); }
+
+        /* Main */
+        #main { flex:1; display:flex; flex-direction:column; min-width:0; position:relative; }
+        #topbar {
+            padding:14px 16px 12px; display:flex; align-items:center;
+            background:var(--bg); border-bottom:1px solid var(--border);
+            flex-shrink:0; gap:10px;
+        }
+        .menu-btn {
+            width:36px; height:36px; background:transparent; border:none;
+            font-size:20px; cursor:pointer; color:var(--sub); flex-shrink:0;
+        }
+        #hdr {
+            font-size:clamp(14px,4vw,17px); font-weight:700;
+            white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+        }
+
+        /* Chat */
+        #chat { flex:1; overflow-y:auto; padding:16px 16px 0; overscroll-behavior:contain; }
+        .chat-inner { padding-bottom:calc(110px + var(--safe-bottom)); }
+
+        /* Welcome */
+        .welcome { text-align:center; padding:clamp(40px,10vh,80px) 20px 20px; }
+        .welcome .logo { font-size:clamp(48px,14vw,72px); margin-bottom:16px; }
+        .welcome h3 { font-size:clamp(17px,4.5vw,22px); font-weight:700; margin-bottom:8px; }
+        .welcome p { font-size:clamp(13px,3.5vw,15px); color:var(--sub); }
+
+        /* Messages */
+        .mw { display:flex; width:100%; margin-bottom:18px; }
+        .mw.user { justify-content:flex-end; }
+        .mw.ai { justify-content:flex-start; }
+        .mc {
+            max-width:min(86%,600px); line-height:1.8;
+            font-size:clamp(13.5px,3.8vw,15.5px); white-space:pre-wrap;
+        }
+        .mw.user .mc {
+            background:var(--umsg); color:var(--text);
+            padding:10px 16px; border-radius:18px; border-bottom-right-radius:4px;
+        }
+        .mw.ai .mc { color:var(--text); padding:4px 2px; }
+        .typing { color:var(--sub); font-style:italic; }
+
+        /* Input */
+        #inp-wrap {
+            flex-shrink:0; padding:8px 14px calc(10px + var(--safe-bottom));
+            background:linear-gradient(transparent,var(--bg) 22%);
+            display:flex; justify-content:center;
+        }
+        .inp-box {
+            width:100%; max-width:700px; display:flex; align-items:flex-end;
+            border:1.5px solid var(--border); border-radius:22px;
+            background:var(--inp); box-shadow:0 2px 12px rgba(0,0,0,.06);
+            padding:4px 6px;
+        }
+        textarea {
+            flex:1; max-height:120px; min-height:40px; padding:9px 10px;
+            border:none; outline:none; resize:none; line-height:1.5;
+            font-size:clamp(14px,4vw,16px); background:transparent;
+            color:var(--text); font-family:var(--font);
+        }
+        textarea::placeholder { color:var(--sub); }
+        #send-btn {
+            background:var(--accent); color:#fff; border:none;
+            width:36px; height:36px; border-radius:10px; margin:4px 3px;
+            cursor:pointer; display:flex; align-items:center;
+            justify-content:center; font-size:18px; flex-shrink:0;
+        }
+        #send-btn:hover { opacity:.88; }
+        #send-btn:disabled { background:#ccc; cursor:not-allowed; }
+
+        /* Settings Panel */
+        .fp { display:none; position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:300; align-items:center; justify-content:center; padding:20px; }
+        .fp.show { display:flex; }
+        .fp-box { background:var(--card); border-radius:20px; padding:26px 20px; width:100%; max-width:400px; box-shadow:0 16px 48px rgba(0,0,0,.2); animation:pop .22s ease; }
+        @keyframes pop { from{transform:scale(.92);opacity:0} to{transform:scale(1);opacity:1} }
+        .fp-title { font-size:18px; font-weight:700; margin-bottom:4px; color:var(--text); }
+        .fp-sub { font-size:13px; color:var(--sub); margin-bottom:18px; }
+        .sc {
+            background:var(--scard); border-radius:13px; padding:14px 15px;
+            margin-bottom:11px; cursor:pointer; border:1.5px solid transparent;
+            display:flex; align-items:center; gap:12px; transition:border-color .2s;
+        }
+        .sc:hover { border-color:var(--accent); }
+        .sc .si { font-size:24px; width:32px; text-align:center; }
+        .sc .st h4 { font-size:14px; font-weight:700; color:var(--text); margin-bottom:2px; }
+        .sc .st p { font-size:12px; color:var(--sub); }
+        .fp-close {
+            margin-top:6px; width:100%; padding:11px; background:transparent;
+            border:1.5px solid var(--border); border-radius:10px; color:var(--sub);
+            cursor:pointer; font-size:14px; font-family:var(--font); font-weight:600;
+        }
+        .th-row { display:flex; gap:10px; margin-bottom:14px; }
+        .th-opt { flex:1; padding:14px 8px; border:2px solid var(--border); border-radius:13px; cursor:pointer; text-align:center; background:var(--scard); }
+        .th-opt.on { border-color:var(--accent); }
+        .th-opt .ti { font-size:26px; margin-bottom:5px; }
+        .th-opt .tn { font-size:13px; font-weight:700; color:var(--text); }
+
+        /* Delete Modal */
+        #del-modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:400; align-items:center; justify-content:center; padding:20px; }
+        #del-modal.show { display:flex; }
+        .mbox { background:var(--card); border-radius:18px; padding:26px 20px; width:100%; max-width:280px; text-align:center; }
+        .mt { font-size:17px; font-weight:700; margin-bottom:8px; color:var(--text); }
+        .mbox p { font-size:13.5px; color:var(--sub); margin-bottom:18px; line-height:1.6; }
+        .mbtns { display:flex; gap:9px; }
+        .mbtns button { flex:1; padding:11px; border:none; border-radius:9px; font-size:14px; cursor:pointer; font-family:var(--font); font-weight:700; }
+        .bc { background:var(--umsg); color:var(--text); }
+        .bd { background:var(--danger); color:#fff; }
+
+        @media(min-width:768px) {
+            #sb { position:relative; left:0!important; width:260px; }
+            #ov { display:none!important; }
+            .menu-btn { display:none; }
+            .mc { max-width:70%; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- Delete Modal -->
+<div id="del-modal">
+    <div class="mbox">
+        <div class="mt">🗑️ Delete Chat?</div>
+        <p>This chat will be permanently deleted.</p>
+        <div class="mbtns">
+            <button class="bc" onclick="closeDel()">Cancel</button>
+            <button class="bd" onclick="confirmDel()">Delete</button>
+        </div>
+    </div>
+</div>
+
+<!-- Settings Panel -->
+<div class="fp" id="fp-settings">
+    <div class="fp-box">
+        <div class="fp-title">⚙️ Settings</div>
+        <div class="fp-sub">Manage your preferences</div>
+        <div class="sc" onclick="showFP('fp-theme')">
+            <div class="si">🎨</div>
+            <div class="st"><h4>Theme</h4><p>Switch Light / Dark mode</p></div>
+        </div>
+        <div class="sc" onclick="clearAll()">
+            <div class="si">🗑️</div>
+            <div class="st">
+                <h4 style="color:var(--danger)">Clear All History</h4>
+                <p>Delete all saved dream chats</p>
+            </div>
+        </div>
+        <button class="fp-close" onclick="hideFP('fp-settings')">✕ Close</button>
+    </div>
+</div>
+
+<!-- Theme Panel -->
+<div class="fp" id="fp-theme">
+    <div class="fp-box">
+        <div class="fp-title">🎨 Choose Theme</div>
+        <div class="fp-sub">Select your preferred appearance</div>
+        <div class="th-row">
+            <div class="th-opt" id="tl" onclick="setTheme('light')"><div class="ti">☀️</div><div class="tn">Light</div></div>
+            <div class="th-opt" id="td" onclick="setTheme('dark')"><div class="ti">🌙</div><div class="tn">Dark</div></div>
+        </div>
+        <button class="fp-close" onclick="hideFP('fp-theme');showFP('fp-settings')">← Back</button>
+    </div>
+</div>
+
+<div id="ov" onclick="closeSB()"></div>
+
+<div id="layout">
+    <div id="sb">
+        <div class="sb-top">
+            <button class="new-btn" onclick="newChat()">+ New Chat</button>
+        </div>
+        <div id="hl"></div>
+        <div class="set-btn" onclick="openSettings()">⚙️ Settings</div>
+    </div>
+
+    <div id="main">
+        <div id="topbar">
+            <button class="menu-btn" onclick="openSB()">☰</button>
+            <span id="hdr">🌙 Dream Lens</span>
+        </div>
+        <div id="chat">
+            <div class="chat-inner" id="chat-inner">
+                <div class="welcome">
+                    <div class="logo">🌙</div>
+                    <h3>Discover the Meaning of Your Dreams</h3>
+                    <p>Describe your dream below in detail</p>
+                </div>
+            </div>
+        </div>
+        <div id="inp-wrap">
+            <div class="inp-box">
+                <textarea id="ti" placeholder="Write your dream here..." rows="1"
+                    oninput="ar(this)" onkeypress="ke(event)"></textarea>
+                <button id="send-btn" onclick="send()">↑</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+'use strict';
+const API_URL   = '/api/interpret';
+const STORE_KEY = 'dreamlens_sessions';
+
+let sessions  = [];
+let curId     = null;
+let theme     = 'light';
+let delTarget = null;
+let sending   = false;
+
+try { sessions = JSON.parse(localStorage.getItem(STORE_KEY) || '[]'); } catch(e) { sessions = []; }
+try { theme = localStorage.getItem('dreamlens_theme') || 'light'; } catch(e) {}
+
+const chatInner = document.getElementById('chat-inner');
+const chatEl    = document.getElementById('chat');
+const ti        = document.getElementById('ti');
+const sendBtn   = document.getElementById('send-btn');
+
+// ── Scroll: ইউজার নিচে থাকলেই scroll হবে ────────────────
+function nearBottom() {
+    return chatEl.scrollHeight - chatEl.scrollTop - chatEl.clientHeight < 150;
+}
+function scrollBot() {
+    if (nearBottom()) requestAnimationFrame(() => { chatEl.scrollTop = chatEl.scrollHeight; });
+}
+function forceScrollBot() {
+    requestAnimationFrame(() => { chatEl.scrollTop = chatEl.scrollHeight; });
+}
+
+// ── UI Helpers ────────────────────────────────────────────
+function showFP(id) { document.querySelectorAll('.fp').forEach(e=>e.classList.remove('show')); document.getElementById(id).classList.add('show'); }
+function hideFP(id) { document.getElementById(id).classList.remove('show'); }
+function openSB()   { document.getElementById('sb').classList.add('open'); document.getElementById('ov').classList.add('show'); }
+function closeSB()  { document.getElementById('sb').classList.remove('open'); document.getElementById('ov').classList.remove('show'); }
+function openSettings() { closeSB(); showFP('fp-settings'); }
+function ar(t) { t.style.height='auto'; t.style.height=Math.min(t.scrollHeight,120)+'px'; }
+function ke(e) { if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); send(); } }
+function fmt(t) {
+    return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+            .replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>')
+            .replace(/\*(.*?)\*/g,'<em>$1</em>');
+}
+
+// ── Theme ─────────────────────────────────────────────────
+function setTheme(t) {
+    theme = t;
+    try { localStorage.setItem('dreamlens_theme', t); } catch(e) {}
+    document.documentElement.setAttribute('data-theme', t);
+    document.getElementById('tl').classList.toggle('on', t==='light');
+    document.getElementById('td').classList.toggle('on', t==='dark');
+}
+
+// ── Delete ────────────────────────────────────────────────
+function openDel(id)  { delTarget=id; document.getElementById('del-modal').classList.add('show'); }
+function closeDel()   { delTarget=null; document.getElementById('del-modal').classList.remove('show'); }
+function confirmDel() {
+    if (!delTarget) return;
+    sessions = sessions.filter(x=>x.id!==delTarget);
+    saveAll();
+    if (curId===delTarget) { curId=null; newChat(); } else renderHist();
+    closeDel();
+}
+function clearAll() {
+    hideFP('fp-settings');
+    setTimeout(()=>{ if(confirm('Delete all chat history?')){ sessions=[]; saveAll(); newChat(); } },150);
+}
+
+// ── Send ──────────────────────────────────────────────────
+async function send() {
+    if (sending) return;
+    const text = ti.value.trim();
+    if (!text) return;
+
+    if (!curId) chatInner.innerHTML = '';
+
+    addMsg('user', text);
+    ti.value=''; ti.style.height='auto';
+    sendBtn.disabled = true;
+    sending = true;
+    saveMsg('user', text);
+    forceScrollBot();
+
+    const aiEl = addMsg('ai', '<span class="typing">Analyzing your dream... ✨</span>');
+
+    try {
+        const controller = new AbortController();
+        const timeout = setTimeout(()=>controller.abort(), 30000);
+
+        const currentSession = sessions.find(x=>x.id===curId);
+        const history = currentSession ? currentSession.messages.slice(-4) : [];
+
+        const r = await fetch(API_URL, {
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({ dream: text, history }),
+            signal: controller.signal
+        });
+        clearTimeout(timeout);
+
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || `Server error ${r.status}`);
+        typewrite(d.text, aiEl);
+        saveMsg('ai', d.text);
+
+    } catch(e) {
+        const msg = e.name==='AbortError'
+            ? 'Request timed out. Please try again.'
+            : e.message || 'Unknown error';
+        aiEl.innerHTML = `<em style="color:var(--danger)">⚠️ ${msg}</em>`;
+    }
+
+    sendBtn.disabled = false;
+    sending = false;
+}
+
+function addMsg(who, html) {
+    const w=document.createElement('div'); w.className=`mw ${who}`;
+    const d=document.createElement('div'); d.className='mc';
+    d.innerHTML = who==='user' ? fmt(html) : html;
+    w.appendChild(d); chatInner.appendChild(w);
+    return d;
+}
+
+function typewrite(text, el) {
+    el.innerHTML='';
+    const f=fmt(text); let i=0;
+    function t() {
+        if(i>=f.length) return;
+        if(f[i]==='<') {
+            let g=''; while(i<f.length&&f[i]!=='>') g+=f[i++]; g+='>'; i++;
+            el.innerHTML+=g;
+        } else { el.innerHTML+=f[i++]; }
+        scrollBot();
+        setTimeout(t,6);
+    }
+    t();
+}
+
+// ── Sessions ──────────────────────────────────────────────
+function saveMsg(role, text) {
+    if (!curId) {
+        curId = Date.now().toString();
+        sessions.unshift({ id:curId, title:text.substring(0,34)+(text.length>34?'…':''), messages:[] });
+        if(sessions.length>50) sessions.pop();
+    }
+    const s = sessions.find(x=>x.id===curId);
+    if(s) s.messages.push({role,text});
+    saveAll(); renderHist();
+}
+function saveAll() {
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(sessions)); }
+    catch(e) {
+        if(sessions.length>10) sessions=sessions.slice(0,10);
+        try { localStorage.setItem(STORE_KEY, JSON.stringify(sessions)); } catch(e2) {}
+    }
+}
+function loadSession(id) {
+    const s=sessions.find(x=>x.id===id);
+    if(!s) return;
+    curId=id; chatInner.innerHTML='';
+    s.messages.forEach(m=>{
+        const w=document.createElement('div'); w.className=`mw ${m.role}`;
+        const d=document.createElement('div'); d.className='mc';
+        d.innerHTML=fmt(m.text);
+        w.appendChild(d); chatInner.appendChild(w);
+    });
+    forceScrollBot(); closeSB(); renderHist();
+}
+function renderHist() {
+    const hl=document.getElementById('hl'); hl.innerHTML='';
+    sessions.forEach(s=>{
+        const d=document.createElement('div');
+        d.className='hi'+(s.id===curId?' on':'');
+        d.textContent=s.title; d.dataset.id=s.id;
+        d.addEventListener('click',()=>loadSession(d.dataset.id));
+        d.addEventListener('contextmenu',e=>{ e.preventDefault(); openDel(d.dataset.id); });
+        let pt=null;
+        d.addEventListener('touchstart',()=>{ d.classList.add('press'); pt=setTimeout(()=>{ d.classList.remove('press'); openDel(d.dataset.id); },600); },{passive:true});
+        d.addEventListener('touchend',  ()=>{ clearTimeout(pt); d.classList.remove('press'); });
+        d.addEventListener('touchmove', ()=>{ clearTimeout(pt); d.classList.remove('press'); });
+        hl.appendChild(d);
+    });
+}
+function newChat() {
+    curId=null;
+    chatInner.innerHTML=`<div class="welcome">
+        <div class="logo">🌙</div>
+        <h3>Discover the Meaning of Your Dreams</h3>
+        <p>Describe your dream below in detail</p>
+    </div>`;
+    closeSB(); renderHist();
+}
+
+// ── Init ─────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded',()=>{ setTheme(theme); renderHist(); });
+</script>
+</body>
+  </html>
