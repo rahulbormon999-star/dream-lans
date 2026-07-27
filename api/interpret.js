@@ -1,4 +1,6 @@
 import { APP_KNOWLEDGE_BASE } from './info.js';
+import { sql } from '../lib/db.js';
+import { getUserIdFromRequest } from '../lib/auth.js';
 
 // ── Per-IP rate limit ─────────────────────────────────────
 const ipMap = new Map();
@@ -118,6 +120,12 @@ export default async function handler(req, res) {
     if (req.method === 'OPTIONS') return res.status(200).end();
     if (req.method !== 'POST')   return res.status(405).json({ error: 'Method not allowed' });
 
+    // ================= লগইন বাধ্যতামূলক =================
+    const userId = getUserIdFromRequest(req);
+    if (!userId) {
+        return res.status(401).json({ error: 'দয়া করে প্রথমে লগইন করুন' });
+    }
+
     const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim()
              || req.socket?.remoteAddress || 'unknown';
 
@@ -192,7 +200,18 @@ export default async function handler(req, res) {
             const usage = data.usage || {};
             saveStats(usage.prompt_tokens || 0, usage.completion_tokens || 0).catch(() => {});
 
-            return res.status(200).json({ text });
+            // ================= প্রতিটা স্বপ্ন ডাটাবেজে লগ (ফিডব্যাক + "কী বেশি জিজ্ঞেস হচ্ছে" এর জন্য) =================
+            let logId = null;
+            try {
+                const inserted = await sql`
+                    INSERT INTO dream_logs (user_id, dream_text, ai_response)
+                    VALUES (${userId}, ${dream.trim()}, ${text})
+                    RETURNING id
+                `;
+                logId = inserted[0].id;
+            } catch (e) { console.error('dream_logs insert failed:', e); }
+
+            return res.status(200).json({ text, logId });
 
         } catch (e) {
             if (e.name === 'AbortError') {
@@ -205,4 +224,4 @@ export default async function handler(req, res) {
     }
 
     return res.status(429).json({ error: 'All API keys exhausted. Please try again later.' });
-                      }
+}
