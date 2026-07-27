@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Dream Lens - AI Dream Interpreter</title>
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#2aabeb">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg:#ffffff; --sb:#f8f8f8; --text:#0d0d0d; --sub:#888;
+            --border:#e8e8e8; --umsg:#f0f0f0; --inp:#ffffff; --card:#ffffff;
+            --scard:#f3f3f3; --accent:#2aabeb; --danger:#e74c3c;
+            --font:'Noto Sans Bengali',sans-serif;
+            --safe-bottom:env(safe-area-inset-bottom,0px);
+            --safe-top:env(safe-area-inset-top,0px);
+        }
+        [data-theme="dark"] {
+            --bg:#13131f; --sb:#1a1a2e; --text:#e6e6f0; --sub:#888;
+            --border:#2a2a40; --umsg:#23233a; --inp:#1e1e32;
+            --card:#1a1a2e; --scard:#23233a;
+        }
+        *,*::before,*::after {
+            margin:0; padding:0; box-sizing:border-box;
+            font-family:var(--font); -webkit-tap-highlight-color:transparent;
+        }
+        html { height:100%; overflow:hidden; }
+        body {
+            display:flex; flex-direction:column; height:100dvh;
+            background:var(--bg); color:var(--text);
+            overflow:hidden; transition:background .3s,color .3s;
+            padding-top:var(--safe-top);
+        }
+
+        #layout { display:flex; flex:1; overflow:hidden; position:relative; }
+
+        /* Overlay */
+        #ov { display:none; position:fixed; inset:0; background:rgba(0,0,0,.3); z-index:90; }
+        #ov.show { display:block; }
+
+        /* Sidebar */
+        #sb {
+            position:absolute; left:-290px; top:0; height:100%; width:min(272px,80vw);
+            background:var(--sb); border-right:1px solid var(--border);
+            display:flex; flex-direction:column;
+            transition:left .28s cubic-bezier(.4,0,.2,1); z-index:100;
+        }
+        #sb.open { left:0; }
+        .sb-top {
+            padding:max(20px,calc(var(--safe-top) + 12px)) 14px 14px;
+            border-bottom:1px solid var(--border); flex-shrink:0;
+        }
+        .new-btn {
+            width:100%; padding:10px 14px; background:transparent;
+            border:1.5px solid var(--border); color:var(--text);
+            border-radius:10px; cursor:pointer; text-align:left;
+            font-weight:700; font-family:var(--font); font-size:14px;
+        }
+        .new-btn:hover { background:var(--umsg); }
+        #hl { flex:1; overflow-y:auto; padding:10px 8px; overscroll-behavior:contain; }
+        .hi {
+            padding:10px 12px; margin-bottom:4px; border-radius:9px; cursor:pointer;
+            white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+            font-size:13.5px; color:var(--text); user-select:none; transition:background .15s;
+        }
+        .hi:hover,.hi.on { background:var(--umsg); }
+        .hi.press { background:#fde8e8; }
+        .set-btn {
+            padding:calc(14px + var(--safe-bottom)) 18px 14px;
+            border-top:1px solid var(--border); cursor:pointer; color:var(--accent);
+            display:flex; align-items:center; gap:10px;
+            font-weight:700; font-size:14px; flex-shrink:0;
+        }
+        .set-btn:hover { background:var(--umsg); }
+
+        /* Main */
+        #main { flex:1; display:flex; flex-direction:column; min-width:0; position:relative; }
+        #topbar {
+            padding:14px 16px 12px; display:flex; align-items:center;
+            background:var(--bg); border-bottom:1px solid var(--border);
+            flex-shrink:0; gap:10px;
+        }
+        .menu-btn {
+            width:36px; height:36px; background:transparent; border:none;
+            font-size:20px; cursor:pointer; color:var(--sub); flex-shrink:0;
+        }
+        #hdr {
+            font-size:clamp(14px,4vw,17px); font-weight:700;
+            white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+        }
+
+        /* Chat */
+        #chat { flex:1; overflow-y:auto; padding:16px 16px 0; overscroll-behavior:contain; }
+        .chat-inner { padding-bottom:calc(110px + var(--safe-bottom)); }
+
+        /* Welcome */
+        .welcome { text-align:center; padding:clamp(40px,10vh,80px) 20px 20px; }
+        .welcome .logo { font-size:clamp(48px,14vw,72px); margin-bottom:16px; }
+        .welcome h3 { font-size:clamp(17px,4.5vw,22px); font-weight:700; margin-bottom:8px; }
+        .welcome p { font-size:clamp(13px,3.5vw,15px); color:var(--sub); }
+
+        /* Messages */
+        .mw { display:flex; width:100%; margin-bottom:18px; flex-direction: column; }
+        .mw.user { align-items:flex-end; }
+        .mw.ai { align-items:flex-start; }
+        .mc {
+            max-width:min(86%,600px); line-height:1.8;
+            font-size:clamp(13.5px,3.8vw,15.5px); white-space:pre-wrap;
+        }
+        .mw.user .mc {
+            background:var(--umsg); color:var(--text);
+            padding:10px 16px; border-radius:18px; border-bottom-right-radius:4px;
+        }
+        .mw.ai .mc { color:var(--text); padding:4px 2px; }
+        .typing { color:var(--sub); font-style:italic; }
+
+        /* ফিডব্যাক বাটন (👍/👎) */
+        .fb-row { display:flex; gap:8px; margin-top:6px; padding:0 2px; }
+        .fb-btn {
+            background:var(--scard); border:1px solid var(--border); border-radius:8px;
+            padding:5px 10px; font-size:14px; cursor:pointer; color:var(--sub);
+            transition:background .15s, border-color .15s;
+        }
+        .fb-btn.picked-up { border-color:#2ecc71; color:#2ecc71; background:rgba(46,204,113,.08); }
+        .fb-btn.picked-down { border-color:var(--danger); color:var(--danger); background:rgba(231,76,60,.08); }
+
+        /* Input */
+        #inp-wrap {
+            flex-shrink:0; padding:8px 14px calc(10px + var(--safe-bottom));
+            background:linear-gradient(transparent,var(--bg) 22%);
+            display:flex; justify-content:center;
+        }
+        .inp-box {
+            width:100%; max-width:700px; display:flex; align-items:flex-end;
+            border:1.5px solid var(--border); border-radius:22px;
+            background:var(--inp); box-shadow:0 2px 12px rgba(0,0,0,.06);
+            padding:4px 6px;
+        }
+        textarea {
+            flex:1; max-height:120px; min-height:40px; padding:9px 10px;
+            border:none; outline:none; resize:none; line-height:1.5;
+            font-size:clamp(14px,4vw,16px); background:transparent;
+            color:var(--text); font-family:var(--font);
+        }
+        textarea::placeholder { color:var(--sub); }
+        #send-btn {
+            background:var(--accent); color:#fff; border:none;
+            width:36px; height:36px; border-radius:10px; margin:4px 3px;
+            cursor:pointer; display:flex; align-items:center;
+            justify-content:center; font-size:18px; flex-shrink:0;
+        }
+        #send-btn:hover { opacity:.88; }
+        #send-btn:disabled { background:#ccc; cursor:not-allowed; }
+
+        /* Settings Panel */
+        .fp { display:none; position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:300; align-items:center; justify-content:center; padding:20px; }
+        .fp.show { display:flex; }
+        .fp-box { background:var(--card); border-radius:20px; padding:26px 20px; width:100%; max-width:400px; box-shadow:0 16px 48px rgba(0,0,0,.2); animation:pop .22s ease; }
+        @keyframes pop { from{transform:scale(.92);opacity:0} to{transform:scale(1);opacity:1} }
+        .fp-title { font-size:18px; font-weight:700; margin-bottom:4px; color:var(--text); }
+        .fp-sub { font-size:13px; color:var(--sub); margin-bottom:18px; }
+        .sc {
+            background:var(--scard); border-radius:13px; padding:14px 15px;
+            margin-bottom:11px; cursor:pointer; border:1.5px solid transparent;
+            display:flex; align-items:center; gap:12px; transition:border-color .2s;
+        }
+        .sc:hover { border-color:var(--accent); }
+        .sc .si { font-size:24px; width:32px; text-align:center; }
+        .sc .st h4 { font-size:14px; font-weight:700; color:var(--text); margin-bottom:2px; }
+        .sc .st p { font-size:12px; color:var(--sub); }
+        .fp-close {
+            margin-top:6px; width:100%; padding:11px; background:transparent;
+            border:1.5px solid var(--border); border-radius:10px; color:var(--sub);
+            cursor:pointer; font-size:14px; font-family:var(--font); font-weight:600;
+        }
+        .th-row { display:flex; gap:10px; margin-bottom:14px; }
+        .th-opt { flex:1; padding:14px 8px; border:2px solid var(--border); border-radius:13px; cursor:pointer; text-align:center; background:var(--scard); }
+        .th-opt.on { border-color:var(--accent); }
+        .th-opt .ti { font-size:26px; margin-bottom:5px; }
+        .th-opt .tn { font-size:13px; font-weight:700; color:var(--text); }
+
+        /* Delete Modal */
+        #del-modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:400; align-items:center; justify-content:center; padding:20px; }
+        #del-modal.show { display:flex; }
+        .mbox { background:var(--card); border-radius:18px; padding:26px 20px; width:100%; max-width:280px; text-align:center; }
+        .mt { font-size:17px; font-weight:700; margin-bottom:8px; color:var(--text); }
+        .mbox p { font-size:13.5px; color:var(--sub); margin-bottom:18px; line-height:1.6; }
+        .mbtns { display:flex; gap:9px; }
+        .mbtns button { flex:1; padding:11px; border:none; border-radius:9px; font-size:14px; cursor:pointer; font-family:var(--font); font-weight:700; }
+        .bc { background:var(--umsg); color:var(--text); }
+        .bd { background:var(--danger); color:#fff; }
+
+        /* ================= Auth Gate (লগইন স্ক্রিন) ================= */
+        #authGate {
+            position:fixed; inset:0; background:var(--bg); z-index:500;
+            display:flex; align-items:center; justify-content:center; padding:20px;
+        }
+        #authGate.hidden { display:none; }
+        .auth-box { width:100%; max-width:380px; text-align:center; }
+        .auth-box .logo { font-size:60px; margin-bottom:10px; }
+        .auth-box h2 { font-size:22px; font-weight:700; margin-bottom:6px; color:var(--text); }
+        .auth-box p.sub { font-size:13.5px; color:var(--sub); margin-bottom:28px; }
+        .auth-btn {
+            width:100%; padding:14px; border-radius:12px; border:1.5px solid var(--border);
+            background:var(--card); color:var(--text); font-family:var(--font);
+            font-weight:700; font-size:14.5px; cursor:pointer; margin-bottom:12px;
+            display:flex; align-items:center; justify-content:center; gap:10px;
+        }
+        .auth-btn.primary { background:var(--accent); color:#fff; border-color:var(--accent); }
+        .auth-divider { display:flex; align-items:center; gap:10px; margin:18px 0; color:var(--sub); font-size:12px; }
+        .auth-divider::before, .auth-divider::after { content:''; flex:1; height:1px; background:var(--border); }
+        .auth-email-input {
+            width:100%; padding:13px 14px; border:1.5px solid var(--border); border-radius:10px;
+            font-size:14.5px; font-family:var(--font); margin-bottom:12px; outline:none;
+            background:var(--inp); color:var(--text);
+        }
+        .auth-email-input:focus { border-color:var(--accent); }
+        .auth-status { font-size:13px; margin-top:10px; min-height:18px; }
+        .auth-back { font-size:13px; color:var(--sub); cursor:pointer; margin-top:14px; }
+
+        @media(min-width:768px) {
+            #sb { position:relative; left:0!important; width:260px; }
+            #ov { display:none!important; }
+            .menu-btn { display:none; }
+            .mc { max-width:70%; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- ================= Auth Gate ================= -->
+<div id="authGate">
+  <div class="auth-box">
+    <div class="logo">🌙</div>
+    <h2>Dream Lens</h2>
+    <p class="sub">চালিয়ে যেতে সাইন ইন করুন</p>
+
+    <div id="authScreenMain">
+      <button class="auth-btn primary" onclick="continueWithDevOnix()">🔷 Continue with Dev-Onix</button>
+      <div class="auth-divider">অথবা</div>
+      <button class="auth-btn" onclick="showEmailScreen()">✉️ Continue with Email</button>
+    </div>
+
+    <div id="authScreenEmail" style="display:none;">
+      <input type="email" id="authEmailInput" class="auth-email-input" placeholder="আপনার ইমেইল দিন">
+      <button class="auth-btn primary" onclick="requestEmailOtp()" id="authEmailSendBtn">কোড পাঠান</button>
+      <div class="auth-back" onclick="showMainScreen()">← পেছনে যান</div>
+      <div class="auth-status" id="authEmailStatus"></div>
+    </div>
+
+    <div id="authScreenOtp" style="display:none;">
+      <p class="sub" style="margin-bottom:14px;"><span id="authOtpEmailShown"></span> ঠিকানায় পাঠানো কোডটি দিন</p>
+      <input type="text" id="authOtpInput" class="auth-email-input" maxlength="6" inputmode="numeric" placeholder="৬ ডিজিটের কোড">
+      <button class="auth-btn primary" onclick="verifyEmailOtp()" id="authOtpVerifyBtn">যাচাই করুন</button>
+      <div class="auth-back" onclick="showEmailScreen()">← পেছনে যান</div>
+      <div class="auth-status" id="authOtpStatus"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Delete Modal -->
+<div id="del-modal">
+    <div class="mbox">
+        <div class="mt">🗑️ Delete Chat?</div>
+        <p>This chat will be permanently deleted.</p>
+        <div class="mbtns">
+            <button class="bc" onclick="closeDel()">Cancel</button>
+            <button class="bd" onclick="confirmDel()">Delete</button>
+        </div>
+    </div>
+</div>
+
+<!-- Settings Panel -->
+<div class="fp" id="fp-settings">
+    <div class="fp-box">
+        <div class="fp-title">⚙️ Settings</div>
+        <div class="fp-sub">Manage your preferences</div>
+        <div class="sc" onclick="showFP('fp-theme')">
+            <div class="si">🎨</div>
+            <div class="st"><h4>Theme</h4><p>Switch Light / Dark mode</p></div>
+        </div>
+        <div class="sc" onclick="clearAll()">
+            <div class="si">🗑️</div>
+            <div class="st">
+                <h4 style="color:var(--danger)">Clear All History</h4>
+                <p>Delete all saved dream chats</p>
+            </div>
+        </div>
+        <div class="sc" onclick="doLogout()">
+            <div class="si">🚪</div>
+            <div class="st">
+                <h4 style="color:var(--danger)">Logout</h4>
+                <p>Sign out of your account</p>
+            </div>
+        </div>
+        <button class="fp-close" onclick="hideFP('fp-settings')">✕ Close</button>
+    </div>
+</div>
+
+<!-- Theme Panel -->
+<div class="fp" id="fp-theme">
+    <div class="fp-box">
+        <div class="fp-title">🎨 Choose Theme</div>
+        <div class="fp-sub">Select your preferred appearance</div>
+        <div class="th-row">
+            <div class="th-opt" id="tl" onclick="setTheme('light')"><div class="ti">☀️</div><div class="tn">Light</div></div>
+            <div class="th-opt" id="td" onclick="setTheme('dark')"><div class="ti">🌙</div><div class="tn">Dark</div></div>
+        </div>
+        <button class="fp-close" onclick="hideFP('fp-theme');showFP('fp-settings')">← Back</button>
+    </div>
+</div>
+
+<div id="ov" onclick="closeSB()"></div>
+
+<div id="layout">
+    <div id="sb">
+        <div class="sb-top">
+            <button class="new-btn" onclick="newChat()">+ New Chat</button>
+        </div>
+        <div id="hl"></div>
+        <div class="set-btn" onclick="openSettings()">⚙️ Settings</div>
+    </div>
+
+    <div id="main">
+        <div id="topbar">
+            <button class="menu-btn" onclick="openSB()">☰</button>
+            <span id="hdr">🌙 Dream Lens</span>
+        </div>
+        <div id="chat">
+            <div class="chat-inner" id="chat-inner">
+                <div class="welcome">
+                 <!--   <div class="logo">🌙</div>
+                    <h3>Discover the Meaning of Your Dreams</h3>
+                    <p>Describe your dream below in detail</p> -->
+                </div>
+            </div>
+        </div>
+        <div id="inp-wrap">
+            <div class="inp-box">
+                <textarea id="ti" placeholder="Write your dream here..." rows="1"
+                    oninput="ar(this)" onkeypress="ke(event)"></textarea>
+                <button id="send-btn" onclick="send()">↑</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+'use strict';
+const API_URL   = '/api/interpret';
+const STORE_KEY = 'dreamlens_sessions';
+
+let sessions  = [];
+let curId     = null;
+let theme     = 'light';
+let delTarget = null;
+let sending   = false;
+let pendingEmail = '';
+
+try { sessions = JSON.parse(localStorage.getItem(STORE_KEY) || '[]'); } catch(e) { sessions = []; }
+try { theme = localStorage.getItem('dreamlens_theme') || 'light'; } catch(e) {}
+
+const chatInner = document.getElementById('chat-inner');
+const chatEl    = document.getElementById('chat');
+const ti        = document.getElementById('ti');
+const sendBtn   = document.getElementById('send-btn');
+
+// ── PWA: Service Worker রেজিস্ট্রেশন ───────────────────────
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js').catch(() => {});
+    });
+}
+
+// ── Scroll: ইউজার নিচে থাকলেই scroll হবে ────────────────
+function nearBottom() {
+    return chatEl.scrollHeight - chatEl.scrollTop - chatEl.clientHeight < 150;
+}
+function scrollBot() {
+    if (nearBottom()) requestAnimationFrame(() => { chatEl.scrollTop = chatEl.scrollHeight; });
+}
+function forceScrollBot() {
+    requestAnimationFrame(() => { chatEl.scrollTop = chatEl.scrollHeight; });
+}
+
+// ── UI Helpers ────────────────────────────────────────────
+function showFP(id) { document.querySelectorAll('.fp').forEach(e=>e.classList.remove('show')); document.getElementById(id).classList.add('show'); }
+function hideFP(id) { document.getElementById(id).classList.remove('show'); }
+function openSB()   { document.getElementById('sb').classList.add('open'); document.getElementById('ov').classList.add('show'); }
+function closeSB()  { document.getElementById('sb').classList.remove('open'); document.getElementById('ov').classList.remove('show'); }
+function openSettings() { closeSB(); showFP('fp-settings'); }
+function ar(t) { t.style.height='auto'; t.style.height=Math.min(t.scrollHeight,120)+'px'; }
+function ke(e) { if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); send(); } }
+function fmt(t) {
+    return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+            .replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>')
+            .replace(/\*(.*?)\*/g,'<em>$1</em>');
+}
+
+// ── Theme ─────────────────────────────────────────────────
+function setTheme(t) {
+    theme = t;
+    try { localStorage.setItem('dreamlens_theme', t); } catch(e) {}
+    document.documentElement.setAttribute('data-theme', t);
+    document.getElementById('tl').classList.toggle('on', t==='light');
+    document.getElementById('td').classList.toggle('on', t==='dark');
+}
+
+// ================= Auth Gate লজিক =================
+function showAuthGate() {
+    document.getElementById('authGate').classList.remove('hidden');
+}
+function hideAuthGate() {
+    document.getElementById('authGate').classList.add('hidden');
+}
+function showMainScreen() {
+    document.getElementById('authScreenMain').style.display = 'block';
+    document.getElementById('authScreenEmail').style.display = 'none';
+    document.getElementById('authScreenOtp').style.display = 'none';
+}
+function showEmailScreen() {
+    document.getElementById('authScreenMain').style.display = 'none';
+    document.getElementById('authScreenEmail').style.display = 'block';
+    document.getElementById('authScreenOtp').style.display = 'none';
+}
+function showOtpScreen() {
+    document.getElementById('authScreenMain').style.display = 'none';
+    document.getElementById('authScreenEmail').style.display = 'none';
+    document.getElementById('authScreenOtp').style.display = 'block';
+}
+
+function continueWithDevOnix() {
+    const devOnixBase = 'https://devonix-ai-five.vercel.app';
+    const myCallback = window.location.origin + '/api/sso-callback';
+    window.location.href = `${devOnixBase}/sso.html?redirect_uri=${encodeURIComponent(myCallback)}`;
+}
+
+async function requestEmailOtp() {
+    const email = document.getElementById('authEmailInput').value.trim();
+    const statusEl = document.getElementById('authEmailStatus');
+    const btn = document.getElementById('authEmailSendBtn');
+
+    if (!email) {
+        statusEl.style.color = 'var(--danger)';
+        statusEl.innerText = 'ইমেইল দিন';
+        return;
+    }
+
+    btn.disabled = true;
+    btn.innerText = 'পাঠানো হচ্ছে...';
+    statusEl.innerText = '';
+
+    try {
+        const res = await fetch('/api/auth-email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'request', email })
+        });
+        const data = await res.json();
+
+        if (res.ok) {
+            pendingEmail = email;
+            document.getElementById('authOtpEmailShown').innerText = email;
+            document.getElementById('authOtpInput').value = '';
+            showOtpScreen();
+        } else {
+            statusEl.style.color = 'var(--danger)';
+            statusEl.innerText = data.error || 'কোড পাঠানো যায়নি';
+        }
+    } catch (e) {
+        statusEl.style.color = 'var(--danger)';
+        statusEl.innerText = 'নেটওয়ার্ক সমস্যা';
+    } finally {
+        btn.disabled = false;
+        btn.innerText = 'কোড পাঠান';
+    }
+}
+
+async function verifyEmailOtp() {
+    const otp = document.getElementById('authOtpInput').value.trim();
+    const statusEl = document.getElementById('authOtpStatus');
+    const btn = document.getElementById('authOtpVerifyBtn');
+
+    if (!otp || otp.length !== 6) {
+        statusEl.style.color = 'var(--danger)';
+        statusEl.innerText = '৬ ডিজিটের কোড দিন';
+        return;
+    }
+
+    btn.disabled = true;
+    btn.innerText = 'যাচাই হচ্ছে...';
+    statusEl.innerText = '';
+
+    try {
+        const res = await fetch('/api/auth-email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'verify', email: pendingEmail, otp })
+        });
+        const data = await res.json();
+
+        if (res.ok) {
+            hideAuthGate();
+        } else {
+            statusEl.style.color = 'var(--danger)';
+            statusEl.innerText = data.error || 'যাচাই ব্যর্থ হয়েছে';
+        }
+    } catch (e) {
+        statusEl.style.color = 'var(--danger)';
+        statusEl.innerText = 'নেটওয়ার্ক সমস্যা';
+    } finally {
+        btn.disabled = false;
+        btn.innerText = 'যাচাই করুন';
+    }
+}
+
+async function doLogout() {
+    try { await fetch('/api/logout', { method: 'POST' }); } catch(e) {}
+    hideFP('fp-settings');
+    showAuthGate();
+    showMainScreen();
+}
+
+async function checkAuth() {
+    // SSO থেকে ফেরত আসার সময় এরর থাকলে দেখানো হচ্ছে
+    const params = new URLSearchParams(window.location.search);
+    const ssoError = params.get('ssoError');
+    if (ssoError) {
+        alert('❌ ' + ssoError);
+        window.history.replaceState({}, '', window.location.pathname);
+    }
+
+    try {
+        const res = await fetch('/api/me');
+        if (res.ok) {
+            hideAuthGate();
+        } else {
+            showAuthGate();
+        }
+    } catch (e) {
+        showAuthGate();
+    }
+}
+
+// ── Delete ────────────────────────────────────────────────
+function openDel(id)  { delTarget=id; document.getElementById('del-modal').classList.add('show'); }
+function closeDel()   { delTarget=null; document.getElementById('del-modal').classList.remove('show'); }
+function confirmDel() {
+    if (!delTarget) return;
+    sessions = sessions.filter(x=>x.id!==delTarget);
+    saveAll();
+    if (curId===delTarget) { curId=null; newChat(); } else renderHist();
+    closeDel();
+}
+function clearAll() {
+    hideFP('fp-settings');
+    setTimeout(()=>{ if(confirm('Delete all chat history?')){ sessions=[]; saveAll(); newChat(); } },150);
+}
+
+// ── Send ──────────────────────────────────────────────────
+async function send() {
+    if (sending) return;
+    const text = ti.value.trim();
+    if (!text) return;
+
+    if (!curId) chatInner.innerHTML = '';
+
+    addMsg('user', text);
+    ti.value=''; ti.style.height='auto';
+    sendBtn.disabled = true;
+    sending = true;
+    saveMsg('user', text);
+    forceScrollBot();
+
+    const aiEl = addMsg('ai', '<span class="typing">Analyzing your dream... ✨</span>');
+
+    try {
+        const controller = new AbortController();
+        const timeout = setTimeout(()=>controller.abort(), 30000);
+
+        const currentSession = sessions.find(x=>x.id===curId);
+        const history = currentSession ? currentSession.messages.slice(-4) : [];
+
+        const r = await fetch(API_URL, {
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({ dream: text, history }),
+            signal: controller.signal
+        });
+        clearTimeout(timeout);
+
+        if (r.status === 401) {
+            aiEl.parentElement.remove();
+            showAuthGate();
+            sendBtn.disabled = false;
+            sending = false;
+            return;
+        }
+
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || `Server error ${r.status}`);
+        typewrite(d.text, aiEl, d.logId);
+        saveMsg('ai', d.text);
+
+    } catch(e) {
+        const msg = e.name==='AbortError'
+            ? 'Request timed out. Please try again.'
+            : e.message || 'Unknown error';
+        aiEl.innerHTML = `<em style="color:var(--danger)">⚠️ ${msg}</em>`;
+    }
+
+    sendBtn.disabled = false;
+    sending = false;
+}
+
+function addMsg(who, html) {
+    const w=document.createElement('div'); w.className=`mw ${who}`;
+    const d=document.createElement('div'); d.className='mc';
+    d.innerHTML = who==='user' ? fmt(html) : html;
+    w.appendChild(d); chatInner.appendChild(w);
+    return d;
+}
+
+function addFeedbackRow(wrapperEl, logId) {
+    if (!logId) return;
+    const row = document.createElement('div');
+    row.className = 'fb-row';
+    row.innerHTML = `
+        <button class="fb-btn" onclick="sendFeedback(${logId}, 'up', this)">👍</button>
+        <button class="fb-btn" onclick="sendFeedback(${logId}, 'down', this)">👎</button>
+    `;
+    wrapperEl.parentElement.appendChild(row);
+}
+
+async function sendFeedback(logId, feedback, btnEl) {
+    const row = btnEl.parentElement;
+    row.querySelectorAll('.fb-btn').forEach(b => b.classList.remove('picked-up', 'picked-down'));
+    btnEl.classList.add(feedback === 'up' ? 'picked-up' : 'picked-down');
+
+    try {
+        await fetch('/api/feedback', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ logId, feedback })
+        });
+    } catch (e) {}
+}
+
+function typewrite(text, el, logId) {
+    el.innerHTML='';
+    const f=fmt(text); let i=0;
+    function t() {
+        if(i>=f.length) { if (logId) addFeedbackRow(el, logId); return; }
+        if(f[i]==='<') {
+            let g=''; while(i<f.length&&f[i]!=='>') g+=f[i++]; g+='>'; i++;
+            el.innerHTML+=g;
+        } else { el.innerHTML+=f[i++]; }
+        scrollBot();
+        setTimeout(t,6);
+    }
+    t();
+}
+
+// ── Sessions ──────────────────────────────────────────────
+function saveMsg(role, text) {
+    if (!curId) {
+        curId = Date.now().toString();
+        sessions.unshift({ id:curId, title:text.substring(0,34)+(text.length>34?'…':''), messages:[] });
+        if(sessions.length>50) sessions.pop();
+    }
+    const s = sessions.find(x=>x.id===curId);
+    if(s) s.messages.push({role,text});
+    saveAll(); renderHist();
+}
+function saveAll() {
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(sessions)); }
+    catch(e) {
+        if(sessions.length>10) sessions=sessions.slice(0,10);
+        try { localStorage.setItem(STORE_KEY, JSON.stringify(sessions)); } catch(e2) {}
+    }
+}
+function loadSession(id) {
+    const s=sessions.find(x=>x.id===id);
+    if(!s) return;
+    curId=id; chatInner.innerHTML='';
+    s.messages.forEach(m=>{
+        const w=document.createElement('div'); w.className=`mw ${m.role}`;
+        const d=document.createElement('div'); d.className='mc';
+        d.innerHTML=fmt(m.text);
+        w.appendChild(d); chatInner.appendChild(w);
+    });
+    forceScrollBot(); closeSB(); renderHist();
+}
+function renderHist() {
+    const hl=document.getElementById('hl'); hl.innerHTML='';
+    sessions.forEach(s=>{
+        const d=document.createElement('div');
+        d.className='hi'+(s.id===curId?' on':'');
+        d.textContent=s.title; d.dataset.id=s.id;
+        d.addEventListener('click',()=>loadSession(d.dataset.id));
+        d.addEventListener('contextmenu',e=>{ e.preventDefault(); openDel(d.dataset.id); });
+        let pt=null;
+        d.addEventListener('touchstart',()=>{ d.classList.add('press'); pt=setTimeout(()=>{ d.classList.remove('press'); openDel(d.dataset.id); },600); },{passive:true});
+        d.addEventListener('touchend',  ()=>{ clearTimeout(pt); d.classList.remove('press'); });
+        d.addEventListener('touchmove', ()=>{ clearTimeout(pt); d.classList.remove('press'); });
+        hl.appendChild(d);
+    });
+}
+function newChat() {
+    curId=null;
+    chatInner.innerHTML=`<div class="welcome">
+        <div class="logo">🌙</div>
+        <h3>Discover the Meaning of Your Dreams</h3>
+        <p>Describe your dream below in detail</p>
+    </div>`;
+    closeSB(); renderHist();
+}
+
+// ── Init ─────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded',()=>{ setTheme(theme); renderHist(); checkAuth(); });
+</script>
+</body>
+  </html>
