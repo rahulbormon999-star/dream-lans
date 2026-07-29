@@ -44,6 +44,12 @@ export function clearSessionCookie(res) {
 export function verifyAdminPassword(inputPassword) {
   const real = process.env.ADMIN_PASSWORD || '';
   const input = inputPassword || '';
+
+  if (!real) {
+    // env variable-ই সেট করা নেই, এটা "ভুল পাসওয়ার্ড" থেকে আলাদা সমস্যা
+    return 'MISSING_ENV';
+  }
+
   const realBuf = Buffer.from(real);
   const inputBuf = Buffer.from(input);
   if (realBuf.length !== inputBuf.length) {
@@ -87,4 +93,4 @@ export function verifySsoToken(token) {
   } catch {
     return null;
   }
-    }
+}
