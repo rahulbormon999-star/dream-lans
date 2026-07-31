@@ -1,4 +1,4 @@
-ভ/ info.js
+// info.js
 
 export const APP_KNOWLEDGE_BASE = `
 [অ্যাপ, নির্মাতা এবং কোম্পানি সংক্রান্ত বিস্তারিত তথ্যভাণ্ডার]
